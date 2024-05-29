@@ -71,5 +71,7 @@ class Dataset(object):
                 user, item, rating = int(arr[0]), int(arr[1]), float(arr[2])
                 if (rating > 3):
                     mat[user, item] = 1.0
+                else:
+                    mat[user, item] = 0.0 #is negatve
                 line = f.readline()    
         return mat

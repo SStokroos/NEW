@@ -21,92 +21,68 @@ _testRatings = None
 _testNegatives = None
 _K = None
 
-def evaluate_model(model, testRatings, testNegatives, K, num_thread):
-    """
-    Evaluate the performance (Hit_Ratio, NDCG) of top-K recommendation
-    Return: score of each test rating.
-    """
+# def evaluate_model(model, testRatings, testNegatives, K, num_thread):
+#     """
+#     Evaluate the performance (Hit_Ratio, NDCG) of top-K recommendation
+#     Return: score of each test rating.
+#     """
+#     global _model
+#     global _testRatings
+#     global _testNegatives
+#     global _K
+
+#     _model = model
+#     _testRatings = testRatings
+#     _testNegatives = testNegatives
+#     _K = K
+
+
+        
+#     hits, ndcgs = [],[]
+#     if(num_thread > 1): # Multi-thread
+#         pool = multiprocessing.Pool(processes=num_thread)
+#         res = pool.map(eval_one_rating, range(len(_testRatings)))
+#         pool.close()
+#         pool.join()
+#         hits = [r[0] for r in res]
+#         ndcgs = [r[1] for r in res]
+#         return (hits, ndcgs)
+#     # Single thread
+#     for idx in tqdm(range(len(_testRatings))):
+#         (hr,ndcg) = eval_one_rating(idx)
+#         hits.append(hr)
+#         ndcgs.append(ndcg)      
+#     return (hits, ndcgs)
+
+
+def evaluate_model(model, testRatings, testNegatives, confounders, K, num_thread):
     global _model
     global _testRatings
     global _testNegatives
+    global _confounders
     global _K
 
     _model = model
     _testRatings = testRatings
     _testNegatives = testNegatives
+    _confounders = confounders
     _K = K
 
-
-        
-    hits, ndcgs = [],[]
-    if(num_thread > 1): # Multi-thread
+    hits, ndcgs = [], []
+    if num_thread > 1:
         pool = multiprocessing.Pool(processes=num_thread)
         res = pool.map(eval_one_rating, range(len(_testRatings)))
         pool.close()
         pool.join()
         hits = [r[0] for r in res]
         ndcgs = [r[1] for r in res]
-        return (hits, ndcgs)
-    # Single thread
+        return hits, ndcgs
+
     for idx in tqdm(range(len(_testRatings))):
-        (hr,ndcg) = eval_one_rating(idx)
+        hr, ndcg = eval_one_rating(idx)
         hits.append(hr)
-        ndcgs.append(ndcg)      
-    return (hits, ndcgs)
-
-
-# def evaluate_model(model, testRatings, testNegatives, K, num_thread, substitute_values):
-#     global _model
-#     global _testRatings
-#     global _testNegatives
-#     global _K
-#     global _substitute_values
-#     _model = model
-#     _testRatings = testRatings
-#     _testNegatives = testNegatives
-#     _K = K
-#     _substitute_values = substitute_values  # New Addition
-        
-#     hits, ndcgs = [],[]
-    
-#     # Validate and filter data here if necessary
-#     valid_indices = [(idx, rating) for idx, rating in enumerate(_testRatings) if rating[0] < substitute_values.shape[0] and all(item < substitute_values.shape[1] for item in _testNegatives[idx] + [rating[1]])]
-
-    
-
-#     if(num_thread > 1):  # Multi-thread
-#         pool = multiprocessing.Pool(processes=num_thread)
-#         res = pool.map(eval_one_rating, [idx for idx, _ in valid_indices])
-#         pool.close()
-#         pool.join()
-#     else:  # Single thread
-#         for idx, _ in tqdm(valid_indices):
-#             (hr, ndcg) = eval_one_rating(idx)
-#             hits.append(hr)
-#             ndcgs.append(ndcg)      
-    
-#     return (hits, ndcgs)
-
-# def eval_one_rating(idx):
-#     rating = _testRatings[idx]
-#     items = _testNegatives[idx].copy()
-#     u = rating[0]
-#     gtItem = rating[1]
-#     items.append(gtItem)
-#     users = np.full(len(items), u, dtype='int32')
-
-#     confounders = _substitute_values[u, items]  # This is now safe to access
-#     predictions = _model.predict([users, np.array(items), confounders], batch_size=100, verbose=0)
-#     map_item_score = {item: predictions[i][0] for i, item in enumerate(items)}
-
-#     items.pop()  # Remove the ground truth item added earlier
-    
-#     ranklist = heapq.nlargest(_K, map_item_score, key=map_item_score.get)
-#     hr = getHitRatio(ranklist, gtItem)
-#     ndcg = getNDCG(ranklist, gtItem)
-#     return (hr, ndcg)
-
-
+        ndcgs.append(ndcg)
+    return hits, ndcgs
 
 def eval_one_rating(idx):
     rating = _testRatings[idx]
@@ -114,21 +90,45 @@ def eval_one_rating(idx):
     u = rating[0]
     gtItem = rating[1]
     items.append(gtItem)
-    # Get prediction scores
+    
     map_item_score = {}
-    users = np.full(len(items), u, dtype = 'int32')
-    predictions = _model.predict([users, np.array(items)], 
+    users = np.full(len(items), u, dtype='int32')
+    confounder_values = [_confounders[u, item] for item in items]
+    predictions = _model.predict([users, np.array(items), np.array(confounder_values)], 
                                  batch_size=100, verbose=0)
     for i in range(len(items)):
         item = items[i]
         map_item_score[item] = predictions[i]
     items.pop()
-    
-    # Evaluate top rank list
+
     ranklist = heapq.nlargest(_K, map_item_score, key=map_item_score.get)
     hr = getHitRatio(ranklist, gtItem)
     ndcg = getNDCG(ranklist, gtItem)
-    return (hr, ndcg)
+    return hr, ndcg
+
+
+
+# def eval_one_rating(idx):
+#     rating = _testRatings[idx]
+#     items = _testNegatives[idx]
+#     u = rating[0]
+#     gtItem = rating[1]
+#     items.append(gtItem)
+#     # Get prediction scores
+#     map_item_score = {}
+#     users = np.full(len(items), u, dtype = 'int32')
+#     predictions = _model.predict([users, np.array(items)], 
+#                                  batch_size=100, verbose=0)
+#     for i in range(len(items)):
+#         item = items[i]
+#         map_item_score[item] = predictions[i]
+#     items.pop()
+    
+#     # Evaluate top rank list
+#     ranklist = heapq.nlargest(_K, map_item_score, key=map_item_score.get)
+#     hr = getHitRatio(ranklist, gtItem)
+#     ndcg = getNDCG(ranklist, gtItem)
+#     return (hr, ndcg)
 
 def getHitRatio(ranklist, gtItem):
     for item in ranklist:

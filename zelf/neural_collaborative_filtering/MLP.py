@@ -25,7 +25,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Run MLP.")
     parser.add_argument('--path', nargs='?', default='C:/Users/Sten Stokroos/Desktop/zelf/neural_collaborative_filtering/Data/',
                         help='Input data path.')
-    parser.add_argument('--dataset', nargs='?', default='r3',
+    parser.add_argument('--dataset', nargs='?', default='ml-1m',
                         help='Choose a dataset.')
     parser.add_argument('--epochs', type=int, default=2,
                         help='Number of epochs.')
@@ -207,7 +207,7 @@ if __name__ == '__main__':
 
     CAUSEFIT_DIR = 'C:/Users/Sten Stokroos/Desktop/zelf/dat/out/ml_wg'
     
-    dim = 1 
+    dim = 30 
     U = np.loadtxt(CAUSEFIT_DIR + '/cause_pmf_k'+str(dim)+'_U.csv')
     V = np.loadtxt(CAUSEFIT_DIR + '/cause_pmf_k'+str(dim)+'_V.csv')
     U = (np.atleast_2d(U.T).T)
