@@ -69,9 +69,9 @@ class Dataset(object):
             while line != None and line != "":
                 arr = line.split("\t")
                 user, item, rating = int(arr[0]), int(arr[1]), float(arr[2])
-                if (rating > 3):
+                if (rating > 0):
                     mat[user, item] = 1.0
-                else:
-                    mat[user, item] = 0.0 #is negatve
+                # else:
+                #     mat[user, item] = 0.0 #is negatve
                 line = f.readline()    
         return mat

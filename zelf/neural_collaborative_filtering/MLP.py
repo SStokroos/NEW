@@ -86,30 +86,6 @@ def get_model(num_users, num_items, layers, reg_layers):
     return model
 
 
-# def get_model(num_users, num_items, layers, reg_layers):
-#     user_input = Input(shape=(1,), dtype='int32', name='user_input')
-#     item_input = Input(shape=(1,), dtype='int32', name='item_input')
-#     substitute_input = Input(shape=(1,), dtype='float32', name='substitute_input')  # Input for substitute confounder
-
-#     embedding_initializer = RandomNormal(mean=0.0, stddev=0.01)
-#     user_embedding = Embedding(input_dim=num_users, output_dim=layers[0]//2, embeddings_initializer=embedding_initializer, embeddings_regularizer=l2(reg_layers[0]), name='user_embedding')(user_input)
-#     item_embedding = Embedding(input_dim=num_items, output_dim=layers[0]//2, embeddings_initializer=embedding_initializer, embeddings_regularizer=l2(reg_layers[0]), name='item_embedding')(item_input)
-
-#     user_latent = Flatten()(user_embedding)
-#     item_latent = Flatten()(item_embedding)
-#     substitute_vector = Reshape((1,))(substitute_input)  # Ensure substitute confounder has correct shape
-
-#     # Correct use of Concatenate layer
-#     concatenate_layer = Concatenate()
-#     vector = concatenate_layer([user_latent, item_latent, substitute_vector])
-
-#     for idx, layer_size in enumerate(layers[1:], start=1):
-#         vector = Dense(layer_size, activation='relu', kernel_regularizer=l2(reg_layers[idx]), name=f'layer{idx}')(vector)
-
-#     prediction = Dense(1, activation='sigmoid', kernel_initializer='lecun_uniform', name='prediction')(vector)
-
-#     model = Model(inputs=[user_input, item_input, substitute_input], outputs=prediction)
-#     return model
 
 def get_train_instances(train, num_negatives):
     user_input, item_input, labels = [], [], []
@@ -122,7 +98,7 @@ def get_train_instances(train, num_negatives):
         item_input.append(i)
         labels.append(1)
 
-        print(f"Processing positive instance for user {u}")
+        # print(f"Processing positive instance for user {u}")
         # negative instances
         for _ in range(num_negatives):
             j = np.random.randint(num_items)
@@ -135,27 +111,6 @@ def get_train_instances(train, num_negatives):
         # print(f"Processed {num_negatives} negative instances for user {u}")
     return np.array(user_input), np.array(item_input), np.array(labels)
 
-# def get_train_instances(train, num_negatives, substitute_values):
-#     user_input, item_input, labels, substitutes = [], [], [], []
-#     for (u, i) in train.keys():
-#         # Append data for the positive instance
-#         user_input.append(u)
-#         item_input.append(i)
-#         labels.append(1)
-#         substitutes.append(substitute_values[u, i])  # Fetch the correct substitute confounder value
-
-#         print(f"Processing positive instance for user {u}")
-#         # Generate negative samples ensuring correct confounder value is used
-#         for _ in range(num_negatives):
-#             j = np.random.randint(num_items)
-#             while (u, j) in train:
-#                 j = np.random.randint(num_items)
-#             user_input.append(u)
-#             item_input.append(j)
-#             labels.append(0)
-#             substitutes.append(substitute_values[u, j])  # Substitute confounder for negative instance
-
-#     return np.array(user_input), np.array(item_input), np.array(labels), np.array(substitutes)
 
 
 

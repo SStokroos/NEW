@@ -15,6 +15,9 @@ from tensorflow.keras.layers import Input, Embedding, Flatten, Dense, Concatenat
 from tensorflow.keras.regularizers import l2
 from tensorflow.keras.optimizers import Adam, Adagrad, RMSprop, SGD
 from tensorflow.keras.initializers import RandomNormal
+from tensorflow.keras.losses import binary_crossentropy
+from tensorflow.keras import backend as K
+
 import numpy as np
 
 # from cython_helpers import get_train_instances, eval_one_rating
@@ -86,9 +89,38 @@ def get_model(num_users, num_items, layers, reg_layers):
     prediction = Dense(1, activation='sigmoid', kernel_initializer='lecun_uniform', name='prediction')(vector)
 
     model = Model(inputs=[user_input, item_input, confounder_input], outputs=prediction)
+    #model.compile(optimizer=Adam(lr=args.lr), loss=lambda y_true, y_pred: custom_loss(y_true, y_pred, confounder_input)) #optiona for custom loss
+
     return model
 
 
+
+
+def get_train_instances(train, confounders, num_negatives):
+    user_input, item_input, confounder_input, labels = [], [], [], []
+    
+    num_users = max(key[0] for key in train.keys()) + 1
+    num_items = max(key[1] for key in train.keys()) + 1
+    max_item_index = confounders.shape[1] - 1
+
+    for (u, i) in train.keys():
+        if i >= confounders.shape[1]:
+            i = max_item_index  # Clip item index
+        user_input.append(u)
+        item_input.append(i)
+        confounder_input.append(confounders[u, i])
+        labels.append(1)
+
+        for _ in range(num_negatives):
+            j = np.random.randint(num_items)
+            while (u, j) in train or j >= confounders.shape[1]:
+                j = np.random.randint(num_items)
+            user_input.append(u)
+            item_input.append(j)
+            confounder_input.append(confounders[u, j])
+            labels.append(0)
+
+    return np.array(user_input), np.array(item_input), np.array(confounder_input), np.array(labels)
 
 # def get_train_instances(train, confounders, num_negatives):
 #     user_input, item_input, confounder_input, labels = [], [], [], []
@@ -98,16 +130,23 @@ def get_model(num_users, num_items, layers, reg_layers):
 #     max_item_index = confounders.shape[1] - 1
 
 #     for (u, i) in train.keys():
-#         if i >= confounders.shape[1]:
-#             i = max_item_index  # Clip item index
-#         user_input.append(u)
-#         item_input.append(i)
-#         confounder_input.append(confounders[u, i])
-#         labels.append(1)
+#         rating = train[u, i]
+#         if rating > 3:  # Consider only ratings > 3 as positive instances
+#             user_input.append(u)
+#             item_input.append(i)
+#             confounder_input.append(confounders[u, i])
+#             labels.append(1)
+#         else:
+#             # Use ratings <= 3 as negative instances but still observed
+#             user_input.append(u)
+#             item_input.append(i)
+#             confounder_input.append(confounders[u, i])
+#             labels.append(0)
 
+#         # Generate negative instances
 #         for _ in range(num_negatives):
 #             j = np.random.randint(num_items)
-#             while (u, j) in train or j >= confounders.shape[1]:
+#             while (u, j) in train.keys() or j >= confounders.shape[1]:
 #                 j = np.random.randint(num_items)
 #             user_input.append(u)
 #             item_input.append(j)
@@ -115,39 +154,6 @@ def get_model(num_users, num_items, layers, reg_layers):
 #             labels.append(0)
 
 #     return np.array(user_input), np.array(item_input), np.array(confounder_input), np.array(labels)
-
-def get_train_instances(train, confounders, num_negatives):
-    user_input, item_input, confounder_input, labels = [], [], [], []
-    
-    num_users = train.shape[0]
-    num_items = train.shape[1]
-    max_item_index = confounders.shape[1] - 1
-
-    for (u, i) in train.keys():
-        rating = train[u, i]
-        if rating > 3:  # Consider only ratings > 3 as positive instances
-            user_input.append(u)
-            item_input.append(i)
-            confounder_input.append(confounders[u, i])
-            labels.append(1)
-        else:
-            # Use ratings <= 3 as negative instances but still observed
-            user_input.append(u)
-            item_input.append(i)
-            confounder_input.append(confounders[u, i])
-            labels.append(0)
-
-        # Generate negative instances
-        for _ in range(num_negatives):
-            j = np.random.randint(num_items)
-            while (u, j) in train.keys() or j >= confounders.shape[1]:
-                j = np.random.randint(num_items)
-            user_input.append(u)
-            item_input.append(j)
-            confounder_input.append(confounders[u, j])
-            labels.append(0)
-
-    return np.array(user_input), np.array(item_input), np.array(confounder_input), np.array(labels)
 
 
 
@@ -243,6 +249,8 @@ if __name__ == '__main__':
         model.compile(optimizer=Adam(learning_rate=learning_rate), loss='binary_crossentropy')
     else:
         model.compile(optimizer=SGD(learning_rate=learning_rate), loss='binary_crossentropy')
+
+
 
     t1 = time()
     (hits, ndcgs) = evaluate_model(model, testRatings, testNegatives, confounders, topK, evaluation_threads)
