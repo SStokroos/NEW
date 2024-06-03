@@ -81,7 +81,7 @@ test_data.head(), test_data.shape
 
 
 # In[8]:
-
+#2037	1805	3	974668726
 
 def split_train_test_proportion(data, uid, test_prop=0.5, random_seed=0):
     data_grouped_by_user = data.groupby(uid)

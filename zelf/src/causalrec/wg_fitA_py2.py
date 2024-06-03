@@ -53,6 +53,9 @@ if __name__ == '__main__':
     n_users = len(unique_uid)
     n_items = len(unique_sid)
 
+    print(n_items)
+    print(n_users)
+
     def load_data(csv_file, shape=(n_users, n_items)):
         tp = pd.read_csv(csv_file)
         rows, cols, vals = np.array(tp['uid']), np.array(tp['sid']), np.array(tp['rating']) 
