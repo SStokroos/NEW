@@ -19,6 +19,7 @@ from tensorflow.keras.initializers import RandomNormal
 from Dataset import Dataset
 from evaluate import evaluate_model
 import argparse
+import pandas as pd  # Added for CSV export
 
 #################### Arguments ####################
 def parse_args():
@@ -27,7 +28,7 @@ def parse_args():
                         help='Input data path.')
     parser.add_argument('--dataset', nargs='?', default='ml-1m',
                         help='Choose a dataset.')
-    parser.add_argument('--epochs', type=int, default=2,
+    parser.add_argument('--epochs', type=int, default=10,
                         help='Number of epochs.')
     parser.add_argument('--batch_size', type=int, default=256,
                         help='Batch size.')
@@ -45,6 +46,8 @@ def parse_args():
                         help='Show performance per X iterations')
     parser.add_argument('--out', type=int, default=1,
                         help='Whether to save the trained model.')
+    parser.add_argument('--pred_out', type=str, default='C:/Users/Sten Stokroos/Desktop/zelf/neural_collaborative_filtering/Data/predicted_scores.csv',
+                        help='Output CSV file for predicted scores.')
     return parser.parse_args()
 
 def get_model(num_users, num_items, layers, reg_layers):
@@ -111,7 +114,11 @@ def get_train_instances(train, num_negatives):
         # print(f"Processed {num_negatives} negative instances for user {u}")
     return np.array(user_input), np.array(item_input), np.array(labels)
 
-
+def generate_predictions(model, num_users, num_items):
+    user_input = np.repeat(np.arange(num_users), num_items)
+    item_input = np.tile(np.arange(num_items), num_users)
+    predictions = model.predict([user_input, item_input], batch_size=256, verbose=1)
+    return user_input, item_input, predictions
 
 
 if __name__ == '__main__':
@@ -133,83 +140,84 @@ if __name__ == '__main__':
 
     timestamp = int(time())
     filename = f"{args.dataset}_MLP_{args.layers.replace(',', '_').replace(' ', '').replace('[', '').replace(']', '')}_{timestamp}.weights.h5"
-    model_out_file = os.path.join('C:/Users/Sten Stokroos/Desktop/Thesis2.0/zelf/neural_collaborative_filtering/Pretrain', filename)
+    model_out_file = os.path.join('C:/Users/Sten Stokroos/Desktop/zelf/neural_collaborative_filtering/Pretrain', filename)
     # model_out_file = 'Pretrain/%s_MLP_%s_%d.weights.h5' % (args.dataset, args.layers, time())
 
     # Loading data
     t1 = time()
     dataset = Dataset(args.path + args.dataset)
     train, testRatings, testNegatives = dataset.trainMatrix, dataset.testRatings, dataset.testNegatives
-
     print(train.shape)
 
     num_users, num_items = train.shape
-    # print("Load data done [%.1f s]. #user=%d, #item=%d, #train=%d, #test=%d" 
-    #       %(time()-t1, num_users, num_items, train.nnz, len(testRatings)))
+    print("Load data done [%.1f s]. #user=%d, #item=%d, #train=%d, #test=%d" 
+          %(time()-t1, num_users, num_items, train.nnz, len(testRatings)))
     
 
-    # # Build model
-    # model = get_model(num_users, num_items, layers, reg_layers)
-    # if learner.lower() == "adagrad": 
-    #     model.compile(optimizer=Adagrad(learning_rate=learning_rate), loss='binary_crossentropy')
-    # elif learner.lower() == "rmsprop":
-    #         model.compile(optimizer=RMSprop(learning_rate=learning_rate), loss='binary_crossentropy')
-    # elif learner.lower() == "adam":
-    #     model.compile(optimizer=Adam(learning_rate=learning_rate), loss='binary_crossentropy')
-    # else:
+    # Build model
+    model = get_model(num_users, num_items, layers, reg_layers)
+    if learner.lower() == "adagrad": 
+        model.compile(optimizer=Adagrad(learning_rate=learning_rate), loss='binary_crossentropy')
+    elif learner.lower() == "rmsprop":
+            model.compile(optimizer=RMSprop(learning_rate=learning_rate), loss='binary_crossentropy')
+    elif learner.lower() == "adam":
+        model.compile(optimizer=Adam(learning_rate=learning_rate), loss='binary_crossentropy')
+    else:
         
-    #     model.compile(optimizer=SGD(learning_rate=learning_rate), loss='binary_crossentropy')    
+        model.compile(optimizer=SGD(learning_rate=learning_rate), loss='binary_crossentropy')    
     
-    # # Check Init performance
-    # t1 = time()
+    # Check Init performance
+    t1 = time()
 
-    # CAUSEFIT_DIR = 'C:/Users/Sten Stokroos/Desktop/zelf/dat/out/ml_wg'
+    CAUSEFIT_DIR = 'C:/Users/Sten Stokroos/Desktop/zelf/dat/out/ml_wg'
     
-    # dim = 30 
-    # U = np.loadtxt(CAUSEFIT_DIR + '/cause_pmf_k'+str(dim)+'_U.csv')
-    # V = np.loadtxt(CAUSEFIT_DIR + '/cause_pmf_k'+str(dim)+'_V.csv')
-    # U = (np.atleast_2d(U.T).T)
-    # V = (np.atleast_2d(V.T).T)
-    # substitute_values = U.dot(V.T)
+    dim = 30 
+    U = np.loadtxt(CAUSEFIT_DIR + '/cause_pmf_k'+str(dim)+'_U.csv')
+    V = np.loadtxt(CAUSEFIT_DIR + '/cause_pmf_k'+str(dim)+'_V.csv')
+    U = (np.atleast_2d(U.T).T)
+    V = (np.atleast_2d(V.T).T)
+    substitute_values = U.dot(V.T)
  
-    # print("Substitute confounders matrix shape:", substitute_values.shape)
-    # print("Type of substitute_values:", type(substitute_values))
+    print("Substitute confounders matrix shape:", substitute_values.shape)
+    print("Type of substitute_values:", type(substitute_values))
 
+    (hits, ndcgs) = evaluate_model(model, testRatings, testNegatives, topK, evaluation_threads)
+    hr, ndcg = np.array(hits).mean(), np.array(ndcgs).mean()
+    print('Init: HR = %.4f, NDCG = %.4f [%.1f]' %(hr, ndcg, time()-t1))
     
 
+    # Train model
+    best_hr, best_ndcg, best_iter = hr, ndcg, -1
+    for epoch in tqdm(range(epochs)):
+        t1 = time()
+        user_input, item_input, labels = get_train_instances(train, num_negatives)
+        print("Model will be fitted here")
+        hist = model.fit([user_input, item_input], labels, batch_size=batch_size, epochs=1, verbose=1, shuffle=True)
+        t2 = time()
 
-    # (hits, ndcgs) = evaluate_model(model, testRatings, testNegatives, topK, evaluation_threads) #, substitute_values)
-    # hr, ndcg = np.array(hits).mean(), np.array(ndcgs).mean()
-    # print('Init: HR = %.4f, NDCG = %.4f [%.1f]' %(hr, ndcg, time()-t1))
+        # Evaluation
+        if epoch % verbose == 0:
+            (hits, ndcgs) = evaluate_model(model, testRatings, testNegatives, topK, evaluation_threads)
+            hr, ndcg, loss = np.array(hits).mean(), np.array(ndcgs).mean(), hist.history['loss'][0]
+            print('Iteration %d [%.1f s]: HR = %.4f, NDCG = %.4f, loss = %.4f [%.1f s]' 
+                  % (epoch,  t2-t1, hr, ndcg, loss, time()-t2))
+            if hr > best_hr:
+                best_hr, best_ndcg, best_iter = hr, ndcg, epoch
+                if args.out > 0:
+                    model.save_weights(model_out_file, overwrite=True)
+
+    print("End. Best Iteration %d:  HR = %.4f, NDCG = %.4f. " %(best_iter, best_hr, best_ndcg))
+    if args.out > 0:
+        print("The best MLP model is saved to %s" %(model_out_file))
     
+    # Generate predictions and save to CSV
+    user_input, item_input, predictions = generate_predictions(model, num_users, num_items)
+    prediction_matrix = np.zeros((num_users, num_items))
+    for user, item, prediction in zip(user_input, item_input, predictions):
+        prediction_matrix[user, item] = prediction[0]  # Extract scalar from array
 
-    # # Train model
-    # best_hr, best_ndcg, best_iter = hr, ndcg, -1
-    # for epoch in tqdm(range(epochs)): #used to be xrange
-    #     t1 = time()
-    #     # # Generate training instances
-    #     # user_input, item_input, labels = get_train_instances(train, num_negatives)
-    #     print("mode wll be fitted here")
-    #     # Training        
-       
-    #     user_input, item_input, labels= get_train_instances(train, num_negatives)   #, substitute_values), could add add subsitutes
-    #     hist = model.fit([user_input, item_input], labels, batch_size=batch_size, epochs=epochs, verbose=1, shuffle=True) #could add substitues 
+    pred_out_file = args.pred_out
+    np.savetxt(pred_out_file, prediction_matrix, delimiter=',')
+    print(f"Predicted scores are saved to {pred_out_file}")
 
-
-
-    #     t2 = time()
-
-    #     # Evaluation
-    #     if epoch %verbose == 0:
-    #         (hits, ndcgs) = evaluate_model(model, testRatings, testNegatives, topK, evaluation_threads)
-    #         hr, ndcg, loss = np.array(hits).mean(), np.array(ndcgs).mean(), hist.history['loss'][0]
-    #         print('Iteration %d [%.1f s]: HR = %.4f, NDCG = %.4f, loss = %.4f [%.1f s]' 
-    #               % (epoch,  t2-t1, hr, ndcg, loss, time()-t2))
-    #         if hr > best_hr:
-    #             best_hr, best_ndcg, best_iter = hr, ndcg, epoch
-    #             if args.out > 0:
-    #                 model.save_weights(model_out_file, overwrite=True)
-
-    # print("End. Best Iteration %d:  HR = %.4f, NDCG = %.4f. " %(best_iter, best_hr, best_ndcg))
-    # if args.out > 0:
-    #     print("The best MLP model is saved to %s" %(model_out_file))
+    
