@@ -145,7 +145,7 @@ def load_data_rating(df, columns=[0, 1, 2], test_size=0.1, sep="\t"):
 
     print('Number of users:', n_users)
     print('Number of items:', n_items)
-    train_data, test_data = train_test_split(df, test_size=test_size)
+    train_data, test_data = train_test_split(df, test_size=test_size,)
 
     train_row = []
     train_col = []
