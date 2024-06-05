@@ -1,2 +1,11 @@
 zelf/neural_collaborative_filtering/Data/predicted_scores_copy.csv
 zelf/neural_collaborative_filtering/Pretrain/predicted_scores.csv
+zelf/neural_collaborative_filtering/Pretrain/predicted_scores.csv
+zelf/neural_collaborative_filtering/Data/predicted_scores_copy.csv
+zelf/dat/out/R3_wg_Afit/cause_pmf_k100_U.csv
+zelf/neural_collaborative_filtering/Data/pinterest-20.test.negative
+zelf/neural_collaborative_filtering/Data/r3.test.negative
+zelf/neural_collaborative_filtering/Data/pinterest-20.train.rating
+zelf/neural_collaborative_filtering/Data/ml-1m.train.rating
+zelf/dat/out/R3_wg_Afit/cause_pmf_k50_U.csv
+zelf/dat/out/ml_wg/cause_pmf_k100_U.csv
