@@ -1,2 +1,0 @@
-zelf/neural_collaborative_filtering/Data/predicted_scores_copy.csv filter=lfs diff=lfs merge=lfs -text
-zelf/neural_collaborative_filtering/Pretrain/predicted_scores.csv filter=lfs diff=lfs merge=lfs -text
