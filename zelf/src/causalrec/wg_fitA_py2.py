@@ -35,7 +35,7 @@ if __name__ == '__main__':
     print("setting params")
 
     DATA_DIR = 'C:/Users/Sten Stokroos/Desktop/zelf/dat/proc/ml_wg'
-    OUT_DATA_DIR = 'C:/Users/Sten Stokroos/Desktop/zelf/dat/out/ml_wg'
+    OUT_DATA_DIR = 'C:/Users/Sten Stokroos/Desktop/Thesis2.0/zelf/dat/out/ml_wg_0.2split'
 
     if not os.path.exists(OUT_DATA_DIR):
         os.makedirs(OUT_DATA_DIR)
@@ -66,6 +66,10 @@ if __name__ == '__main__':
     train_data = load_data(os.path.join(DATA_DIR, 'train.csv'))
     vad_data = load_data(os.path.join(DATA_DIR, 'validation.csv'))
     test_data = load_data(os.path.join(DATA_DIR, 'test_full.csv'))
+
+    print(train_data.shape)
+    print(vad_data.shape)
+    print(test_data.shape)
 
     train_data_imp = exp_to_imp(train_data, 0.5)
     vad_data_imp = exp_to_imp(vad_data, 0.5)

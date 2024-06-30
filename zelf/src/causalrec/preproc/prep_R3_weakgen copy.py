@@ -20,7 +20,7 @@ from sklearn.cluster import KMeans
 from scipy.stats import invgamma
 
 from scipy import sparse, stats
-
+from sklearn.model_selection import train_test_split
 # plt.style.use('ggplot')
 
 
@@ -55,18 +55,55 @@ from scipy import sparse, stats
 
 # DATA_DIR = 'C:/Users/Sten Stokroos/Desktop/zelf/neural_collaborative_filtering/Data'
 DATA_DIR = 'C:/Users/Sten Stokroos/Desktop/zelf/neural_collaborative_filtering/Data'
-OUT_DATA_DIR = 'C:/Users/Sten Stokroos/Desktop/Thesis2.0/zelf/dat/proc/ml_wg_0.2plit'
+OUT_DATA_DIR = 'C:/Users/Sten Stokroos/Desktop/Thesis2.0/zelf/dat/proc/ml_wg2'
 
 # Now you can use these paths to read your data
 # tr_vd_data = pd.read_csv(os.path.join(DATA_DIR, 'ydata-ymusic-rating-study-v1_0-train.txt'), sep="\t", header=None, names=['userId', 'songId', 'rating'], engine="python")
 # test_data = pd.read_csv(os.path.join(DATA_DIR, 'ydata-ymusic-rating-study-v1_0-test.txt'), sep="\t", header=None, names=['userId', 'songId', 'rating'], engine="python")
 
+def load_and_combine_data(df1, df2):
+    # Load the first file
+    # df1 = pd.read_csv(file1, sep=sep, header=None, names=['userId', 'itemId', 'rating'], usecols=columns, engine="python")
+    
+    # Load the second file
+    # df2 = pd.read_csv(file2, sep=sep, header=None, names=['userId', 'itemId', 'rating'], usecols=columns, engine="python")
 
-tr_vd_data = pd.read_csv(os.path.join(DATA_DIR, 'ml-1m.train.rating'), sep="\t", header=None, names=['userId', 'songId', 'rating'], usecols=[0, 1, 2], engine="python")
-test_data = pd.read_csv(os.path.join(DATA_DIR, 'ml-1m.test.rating'), sep="\t", header=None, names=['userId', 'songId', 'rating'], usecols=[0, 1, 2], engine="python")
+    # Sort the dataframes by userId
+    df1 = df1.sort_values(by=['userId'])
+    df2 = df2.sort_values(by=['userId'])
+    
+    # Initialize an empty list to hold the combined rows
+    combined_rows = []
+
+    # Iterate over each user in the first dataframe
+    for user in df1['userId'].unique():
+        # Get all rows for the current user in the first dataframe
+        user_df1 = df1[df1['userId'] == user]
+        combined_rows.append(user_df1)
+        
+        # Get all rows for the current user in the second dataframe
+        user_df2 = df2[df2['userId'] == user]
+        if not user_df2.empty:
+            combined_rows.append(user_df2)
+    
+    # Concatenate all the collected rows into a single dataframe
+    combined_df = pd.concat(combined_rows, ignore_index=True)
+    
+    return combined_df
+
+def load_data_rating(df, columns=[0, 1, 2], test_size=0.1, sep="\t"):
+
+    train_data, test_data = train_test_split(df, test_size=test_size, random_state= 0)
+
+    return train_data, test_data  
 
 
+file1 = pd.read_csv(os.path.join(DATA_DIR, 'ml-1m.train.rating'), sep="\t", header=None, names=['userId', 'songId', 'rating'], usecols=[0, 1, 2], engine="python")
+file2 = pd.read_csv(os.path.join(DATA_DIR, 'ml-1m.test.rating'), sep="\t", header=None, names=['userId', 'songId', 'rating'], usecols=[0, 1, 2], engine="python")
 
+df = load_and_combine_data(file1, file2)
+
+tr_vd_data, test_data = load_data_rating(df)
 # In[6]:
 
 
@@ -152,7 +189,7 @@ n_users, n_items
 user2id = dict((uid, i) for (i, uid) in enumerate(unique_uid))
 song2id = dict((sid, i) for (i, sid) in enumerate(unique_sid))
 
-
+user2id
 
 
 
@@ -218,14 +255,14 @@ print(tr_vd_data['sid'].isnull().sum(), "NaNs in 'sid'")
 print(tr_vd_data['rating'].isnull().sum(), "NaNs in 'rating'")
 
 
-tr_vd_data = tr_vd_data.dropna(subset=['sid'])
+# tr_vd_data = tr_vd_data.dropna(subset=['sid'])
 
 print(tr_vd_data)
 
 # In[19]:
 
 
-train_data, vad_data = split_train_test_proportion(tr_vd_data, 'uid', test_prop=0.2, random_seed=12345)
+train_data, vad_data = split_train_test_proportion(tr_vd_data, 'uid', test_prop=0.6, random_seed=12345)
 obs_test_data, vad_data = split_train_test_proportion(vad_data, 'uid', test_prop=0.5, random_seed=12345)
 
 
@@ -293,12 +330,11 @@ def move_to_fill(part_data_1, part_data_2, unique_id, key):
 
 
 # In[23]:
-print(train_data.shape)
+
 
 train_data, vad_data = move_to_fill(train_data, vad_data, np.arange(n_items), 'sid')
 train_data, obs_test_data = move_to_fill(train_data, obs_test_data, np.arange(n_items), 'sid')
 
-print(train_data.shape)
 
 # In[24]:
 

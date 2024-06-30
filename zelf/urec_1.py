@@ -137,7 +137,7 @@ def RMSE(error, num):
 def MAE(error_mae, num):
     return (error_mae / num)
 
-def load_data_rating(df, columns=[0, 1, 2], test_size=0.1, sep="\t"):
+def load_data_rating(df, file1, file2, columns=[0, 1, 2], test_size=0.1, sep="\t"):
     print(df.head())
 
     n_users = df['userId'].unique().shape[0]
@@ -145,7 +145,13 @@ def load_data_rating(df, columns=[0, 1, 2], test_size=0.1, sep="\t"):
 
     print('Number of users:', n_users)
     print('Number of items:', n_items)
-    train_data, test_data = train_test_split(df, test_size=test_size,)
+    # train_data, test_data = train_test_split(df, test_size=test_size, random_state= 0)
+    train_data = pd.read_csv(file1, sep=sep, header=None, names=['userId', 'itemId', 'rating'], usecols=columns, engine="python")
+    test_data = pd.read_csv(file2, sep=sep, header=None, names=['userId', 'itemId', 'rating'], usecols=columns, engine="python")
+
+    print(train_data.shape)
+    print(test_data.shape)
+
 
     train_row = []
     train_col = []
@@ -215,22 +221,32 @@ file1 = 'C:/Users/Sten Stokroos/Desktop/zelf/neural_collaborative_filtering/Data
 file2 = 'C:/Users/Sten Stokroos/Desktop/zelf/neural_collaborative_filtering/Data/ml-1m.test.rating' # Replace with the actual file path
 combined_df = load_and_combine_data(file1, file2, columns=[0, 1, 2], sep="\t")
 
-train, test, user, item = load_data_rating(combined_df, columns=[0, 1, 2], test_size=0.1, sep="\t")
+combined_df.to_csv('C:/Users/Sten Stokroos/Desktop/Thesis2.0/zelf/neural_collaborative_filtering/Data/ml-1m.csv', index = False)
 
-# CAUSEFIT_DIR = 'C:/Users/Sten Stokroos/Desktop/zelf/dat/out/ml_wg'
+train, test, user, item = load_data_rating(combined_df, file1, file2, columns=[0, 1, 2], test_size=0.2, sep="\t")
+
+
+
+CAUSEFIT_DIR = 'C:/Users/Sten Stokroos/Desktop/Thesis2.0/zelf/xposure_matrix.csv'
     
-# dim = 30 
-# U = np.loadtxt(CAUSEFIT_DIR + '/cause_pmf_k'+str(dim)+'_U.csv')
-# B = np.loadtxt(CAUSEFIT_DIR + '/cause_pmf_k'+str(dim)+'_V.csv')
+dim = 30 
+# U = np.loadtxt(CAUSEFIT_DIR)# + '/cause_pmf_k'+str(dim)+'_U.csv')
+# B = np.loadtxt(CAUSEFIT_DIR)# + '/cause_pmf_k'+str(dim)+'_V.csv')
 # U = np.atleast_2d(U.T).T
 # B = np.atleast_2d(B.T).T
 # confounder_data = (U.dot(B.T)).T
 
-#MLP OPtion
-df = pd.read_csv('C:/Users/Sten Stokroos/Desktop/Thesis2.0/zelf/neural_collaborative_filtering/Data/predicted_scores_copy.csv')
-confounder_data = df.to_numpy()
-# Transpose the array if needed
+conf_df = pd.read_csv(CAUSEFIT_DIR, header=None)
+
+# Convert the DataFrame to a NumPy array
+confounder_data = conf_df.to_numpy()
 confounder_data = confounder_data.T
+
+# #MLP OPtion
+# df = pd.read_csv('C:/Users/Sten Stokroos/Desktop/Thesis2.0/zelf/neural_collaborative_filtering/Data/predicted_scores_copy.csv')
+# confounder_data = df.to_numpy()
+# # Transpose the array if needed
+# confounder_data = confounder_data.T
 
 
 
@@ -247,6 +263,9 @@ with tf.compat.v1.Session(config=config) as sess:
     model.execute(train, test, confounder_data, exposure_data)
 
 
-# [02:09<00:00,  6.50s/epoch, Loss=6.06e+4, RMSE=0.916, MAE=0.728] EVEN BETTTERRRR HPF
+
 # 20/20 [01:15<00:00,  3.79s/epoch, Loss=5.98e+4, RMSE=0.91, MAE=0.721] YES BABYYYYY MLP
+
+# 3.16s/epoch, Loss=6.76e+4, RMSE=0.976, MAE=0.778] HPF and test.rating everywehre
+
 

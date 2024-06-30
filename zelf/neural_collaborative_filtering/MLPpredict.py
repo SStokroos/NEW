@@ -99,7 +99,7 @@ def get_train_instances(train, num_negatives):
         # positive instance
         user_input.append(u)
         item_input.append(i)
-        labels.append(1)
+        labels.append(1) 
 
         # print(f"Processing positive instance for user {u}")
         # negative instances
@@ -119,6 +119,36 @@ def generate_predictions(model, num_users, num_items):
     item_input = np.tile(np.arange(num_items), num_users)
     predictions = model.predict([user_input, item_input], batch_size=256, verbose=1)
     return user_input, item_input, predictions
+
+def load_and_combine_data(file1, file2, columns=[0, 1, 2], sep="\t"):
+    # Load the first file
+    df1 = pd.read_csv(file1, sep=sep, header=None, names=['userId', 'itemId', 'rating'], usecols=columns, engine="python")
+    
+    # Load the second file
+    df2 = pd.read_csv(file2, sep=sep, header=None, names=['userId', 'itemId', 'rating'], usecols=columns, engine="python")
+
+    # Sort the dataframes by userId
+    df1 = df1.sort_values(by=['userId'])
+    df2 = df2.sort_values(by=['userId'])
+    
+    # Initialize an empty list to hold the combined rows
+    combined_rows = []
+
+    # Iterate over each user in the first dataframe
+    for user in df1['userId'].unique():
+        # Get all rows for the current user in the first dataframe
+        user_df1 = df1[df1['userId'] == user]
+        combined_rows.append(user_df1)
+        
+        # Get all rows for the current user in the second dataframe
+        user_df2 = df2[df2['userId'] == user]
+        if not user_df2.empty:
+            combined_rows.append(user_df2)
+    
+    # Concatenate all the collected rows into a single dataframe
+    combined_df = pd.concat(combined_rows, ignore_index=True)
+    
+    return combined_df
 
 
 if __name__ == '__main__':
