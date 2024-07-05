@@ -254,7 +254,7 @@ def prepare_data(train, test, a, b):
            user_train_set, item_train_set, user_test_set, item_test_set, num_users, num_items
 
 # Load and prepare data
-ml_full, train, test = choose_data('ml', test_size=0.2)
+ml_full, train, test = choose_data('ml', test_size=0.1)
 a = 1  # Adjust these values as needed
 b = 0  # Adjust these values as needed
 R, mask_R, C, train_R, train_mask_R, test_R, test_mask_R, num_train_ratings, num_test_ratings, \
@@ -264,8 +264,8 @@ user_train_set, item_train_set, user_test_set, item_test_set, num_users, num_ite
 config = tf.compat.v1.ConfigProto()
 config.gpu_options.allow_growth = True
 
-args = argparse.Namespace(hidden_neuron=500, lambda_value=1, train_epoch=50, batch_size=100, optimizer_method='Adam', grad_clip=False, base_lr=1e-3, decay_epoch_step=50, random_seed=1000, display_step=1)
+args = argparse.Namespace(hidden_neuron=500, lambda_value=1, train_epoch=100, batch_size=100, optimizer_method='Adam', grad_clip=False, base_lr=1e-3, decay_epoch_step=50, random_seed=1000, display_step=1)
 
 with tf.compat.v1.Session(config=config) as sess:
-    model = AutoRec(sess, args, num_users, num_items, R, mask_R, C, train_R, train_mask_R, test_R, test_mask_R, num_train_ratings, num_test_ratings, user_train_set, item_train_set, user_test_set, item_test_set, 'results/')
+    model = AutoRec(sess, args, num_users, num_items, R, mask_R, C, train_R, train_mask_R, test_R, test_mask_R, num_train_ratings, num_test_ratings, user_train_set, item_train_set, user_test_set, item_test_set, 'zelf/results/')
     model.run()

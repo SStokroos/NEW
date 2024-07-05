@@ -1,12 +1,14 @@
 import tensorflow as tf
 import time
 import numpy as np
-import scipy
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from scipy.sparse import csr_matrix
 from tqdm import tqdm
+from hyperopt import hp, fmin, tpe, Trials, STATUS_OK
 import os
+
+
 
 dir_r3 = 'C:/Users/Sten Stokroos/Desktop/NEW/zelf/Data/out'
 dir_ml = 'C:/Users/Sten Stokroos/Desktop/NEW/zelf/Data/out'
@@ -29,7 +31,6 @@ def choose_data(dat, test_size=0.1):
         print('Wrong data input')
         return None, None, None
 
-
 class UAutoRec():
     def __init__(self, sess, num_user, num_item, learning_rate=0.001, reg_rate=0.1, epoch=500, batch_size=200,
                  verbose=False, T=3, display_step=1000):
@@ -43,24 +44,20 @@ class UAutoRec():
         self.verbose = verbose
         self.T = T
         self.display_step = display_step
-        print("UAutoRec with Confounder as Additional Variables.")
+        print("UAutoRec with Confounder as Bias.")
 
     def build_network(self, hidden_neuron=500):
         self.rating_matrix = tf.compat.v1.placeholder(dtype=tf.float32, shape=[self.num_item, None])
         self.rating_matrix_mask = tf.compat.v1.placeholder(dtype=tf.float32, shape=[self.num_item, None])
         self.confounder_matrix = tf.compat.v1.placeholder(dtype=tf.float32, shape=[self.num_item, None])
 
-        # Concatenate the rating matrix and the confounder matrix along the item dimension
-        combined_input = tf.concat([self.rating_matrix, self.confounder_matrix], axis=0)
-
-        V = tf.Variable(tf.random.normal([hidden_neuron, self.num_item * 2], stddev=0.01))
+        V = tf.Variable(tf.random.normal([hidden_neuron, self.num_item], stddev=0.01))
         W = tf.Variable(tf.random.normal([self.num_item, hidden_neuron], stddev=0.01))
 
-        mu = tf.Variable(tf.random.normal([hidden_neuron], stddev=0.01))
-        b = tf.Variable(tf.random.normal([self.num_item], stddev=0.01))
-        layer_1 = tf.sigmoid(tf.expand_dims(mu, 1) + tf.matmul(V, combined_input))
-        self.layer_2 = tf.matmul(W, layer_1) + tf.expand_dims(b, 1)
-
+        # Use the confounder matrix as the bias term
+        layer_1 = tf.sigmoid(self.confounder_matrix + tf.matmul(V, self.rating_matrix))
+        self.layer_2 = tf.matmul(W, layer_1)
+        
         self.loss = tf.reduce_mean(tf.square(
             tf.norm(tf.multiply((self.rating_matrix - self.layer_2), self.rating_matrix_mask)))) + self.reg_rate * (
         tf.square(tf.norm(W)) + tf.square(tf.norm(V)))
@@ -175,15 +172,12 @@ def load_data_rating(dat, columns=[0, 1, 2], sep="\t"):
     return train_matrix.todok(), test_matrix.todok(), n_users, n_items
 
 # Assuming confounder data is loaded from somewhere
-CAUSEFIT_DIR = 'C:/Users/Sten Stokroos/Desktop/NEW/zelf/Data/exposure_output/exp_0.1_k30_strat.csv'
+CAUSEFIT_DIR = 'C:/Users/Sten Stokroos/Desktop/NEW/zelf/Data/exposure_output/exp_ml_0.1_k30.csv'
 conf_df = pd.read_csv(CAUSEFIT_DIR, header=None)
 confounder_data = conf_df.to_numpy()
 confounder_data = confounder_data.T
 
 train, test, user, item = load_data_rating('ml', columns=[0, 1, 2], sep="\t")
-
-# Adjust the shape of the confounder data to match number of items and number of users
-# confounder_data = confounder_data[:item, :user]
 
 # Set TensorFlow session
 config = tf.compat.v1.ConfigProto()
@@ -191,7 +185,7 @@ config.gpu_options.allow_growth = True
 
 with tf.compat.v1.Session(config=config) as sess:
     model = UAutoRec(sess, user, item, learning_rate=0.001, reg_rate=0.1, epoch=50, batch_size=500, verbose=True)
-    model.build_network(hidden_neuron=500)
+    model.build_network()
     model.execute(train, test, confounder_data)
     
     final_rmse, final_mae = model.test(test, confounder_data)

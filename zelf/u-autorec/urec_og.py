@@ -11,9 +11,32 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from scipy.sparse import csr_matrix
 from tqdm import tqdm
+import os
 # from skopt import BayesSearchCV
 # from skopt.space import Real, Integer, Categorical
 # from sklearn.base import BaseEstimator, RegressorMixin
+
+
+dir_r3 = 'C:/Users/Sten Stokroos/Desktop/NEW/zelf/Data/out'
+dir_ml = 'C:/Users/Sten Stokroos/Desktop/NEW/zelf/Data/out'
+randseed = 42
+
+def choose_data(dat, test_size=0.1):
+    if dat == 'r3':
+        train = pd.read_csv(os.path.join(dir_r3, 'r3_train.csv'), sep="\t", header=None, names=['userId', 'songId', 'rating'], usecols=[0, 1, 2], engine="python")
+        test = pd.read_csv(os.path.join(dir_r3, 'r3_test.csv'), sep="\t", header=None, names=['userId', 'songId', 'rating'], usecols=[0, 1, 2], engine="python")
+        
+        # Combine train and test to create the full dataset
+        r3_full = pd.concat([train, test]).sort_values(by=['userId', 'songId']).reset_index(drop=True)
+        
+        return r3_full, train, test
+    elif dat == 'ml':
+        ml_full = pd.read_csv(os.path.join(dir_ml, 'ml-1m_full.csv'), sep="\t", header=None, names=['userId', 'songId', 'rating'], usecols=[0, 1, 2], engine="python")
+        train, test = train_test_split(ml_full, test_size=test_size, random_state=randseed)
+        return ml_full, train, test
+    else:
+        print('Wrong data input')
+        return None, None, None
 
 class UAutoRec():
     def __init__(self, sess, num_user, num_item, learning_rate=0.001, reg_rate=0.1, epoch=500, batch_size=200,
@@ -118,19 +141,20 @@ def RMSE(error, num):
 def MAE(error_mae, num):
     return (error_mae / num)
 
-def load_data_rating(train_file, test_file, columns=[0, 1, 2], sep="\t"):
-    train_data = pd.read_csv(train_file, sep=sep, header=None, names=['userId', 'itemId', 'rating'], usecols=columns, engine="python")
-    # train_data, vd_data =  train_test_split(tr_vd_dat, test_size=0.2, random_state=42)#pd.read_csv(train_file, sep=sep, header=None, names=['userId', 'itemId', 'rating'], usecols=columns, engine="python")
-    test_data = pd.read_csv(test_file, sep=sep, header=None, names=['userId', 'itemId', 'rating'], usecols=columns, engine="python")
+def load_data_rating(dat, columns=[0, 1, 2], sep="\t"):
+    full, train, test = choose_data(dat, test_size= 0.1)
 
-    n_users = max(train_data['userId'].max(), test_data['userId'].max()) + 1
-    n_items = max(train_data['itemId'].max(), test_data['itemId'].max()) + 1
+    
+    # train, vad =  train_test_split(train_df, test_size=0.1, random_state=42)#pd.read_csv(train_file, sep=sep, header=None, names=['userId', 'itemId', 'rating'], usecols=columns, engine="python")
+    
+    n_users = max(train['userId'].max(), test['userId'].max()) + 1
+    n_items = max(train['songId'].max(), test['songId'].max()) + 1
 
     train_row = []
     train_col = []
     train_rating = []
 
-    for line in train_data.itertuples():
+    for line in train.itertuples():
         u = line[1]
         i = line[2]
         train_row.append(u)
@@ -142,7 +166,7 @@ def load_data_rating(train_file, test_file, columns=[0, 1, 2], sep="\t"):
     test_row = []
     test_col = []
     test_rating = []
-    for line in test_data.itertuples():
+    for line in test.itertuples():
         u = line[1]
         i = line[2]
         test_row.append(u)
@@ -154,7 +178,7 @@ def load_data_rating(train_file, test_file, columns=[0, 1, 2], sep="\t"):
     # vd_row = []
     # vd_col = []
     # vd_rating = []
-    # for line in vd_data.itertuples():
+    # for line in vad.itertuples():
     #     u = line[1]
     #     i = line[2]
     #     vd_row.append(u)
@@ -166,11 +190,8 @@ def load_data_rating(train_file, test_file, columns=[0, 1, 2], sep="\t"):
     print("Load data finished. Number of users:", n_users, "Number of items:", n_items)
     return train_matrix.todok(), test_matrix.todok(), n_users, n_items
 
-# Example usage
-file1 = 'C:/Users/Sten Stokroos/Desktop/zelf/neural_collaborative_filtering/Data/ml-1m.train.rating'  # Replace with the actual file path
-file2 = 'C:/Users/Sten Stokroos/Desktop/zelf/neural_collaborative_filtering/Data/ml-1m.test.rating' # Replace with the actual file path
 
-train, test, user, item = load_data_rating(file1, file2, columns=[0, 1, 2], sep="\t")
+train, test, user, item = load_data_rating('r3', columns=[0, 1, 2], sep="\t")
 
 
 
@@ -180,7 +201,7 @@ config = tf.compat.v1.ConfigProto()
 config.gpu_options.allow_growth = True
 
 with tf.compat.v1.Session(config=config) as sess:
-    model = UAutoRec(sess, user, item, learning_rate=0.001, reg_rate=0.1, epoch=20, batch_size=500, verbose=True)
+    model = UAutoRec(sess, user, item, learning_rate=0.001, reg_rate=0.1, epoch=50, batch_size=500, verbose=True)
     model.build_network()
     model.execute(train, test)
 

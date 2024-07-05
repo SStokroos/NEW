@@ -93,34 +93,31 @@ class IAutoRec():
         self.input_mask_R = tf.compat.v1.placeholder(dtype=tf.float32, shape=[None, self.num_items], name="input_mask_R")
         self.input_confounder_R = tf.compat.v1.placeholder(dtype=tf.float32, shape=[None, self.num_items], name="input_confounder_R")
 
-        # Rating path
+        # Rating Path
         V_R = tf.compat.v1.get_variable(name="V_R", initializer=tf.random.truncated_normal(shape=[self.num_items, self.hidden_neuron], mean=0, stddev=0.03), dtype=tf.float32)
-        W_R = tf.compat.v1.get_variable(name="W_R", initializer=tf.random.truncated_normal(shape=[self.hidden_neuron, self.num_items], mean=0, stddev=0.03), dtype=tf.float32)
         mu_R = tf.compat.v1.get_variable(name="mu_R", initializer=tf.zeros(shape=self.hidden_neuron), dtype=tf.float32)
-        b_R = tf.compat.v1.get_variable(name="b_R", initializer=tf.zeros(shape=self.num_items), dtype=tf.float32)
-
         pre_Encoder_R = tf.matmul(self.input_R, V_R) + mu_R
         Encoder_R = tf.nn.sigmoid(pre_Encoder_R)
-        pre_Decoder_R = tf.matmul(Encoder_R, W_R) + b_R
 
-        # Confounder path
+        # Confounder Path
         V_C = tf.compat.v1.get_variable(name="V_C", initializer=tf.random.truncated_normal(shape=[self.num_items, self.hidden_neuron], mean=0, stddev=0.03), dtype=tf.float32)
-        W_C = tf.compat.v1.get_variable(name="W_C", initializer=tf.random.truncated_normal(shape=[self.hidden_neuron, self.num_items], mean=0, stddev=0.03), dtype=tf.float32)
         mu_C = tf.compat.v1.get_variable(name="mu_C", initializer=tf.zeros(shape=self.hidden_neuron), dtype=tf.float32)
-        b_C = tf.compat.v1.get_variable(name="b_C", initializer=tf.zeros(shape=self.num_items), dtype=tf.float32)
-
         pre_Encoder_C = tf.matmul(self.input_confounder_R, V_C) + mu_C
         Encoder_C = tf.nn.sigmoid(pre_Encoder_C)
-        pre_Decoder_C = tf.matmul(Encoder_C, W_C) + b_C
 
-        # Combine paths
-        pre_Decoder = pre_Decoder_R + pre_Decoder_C
+        # Combine Encoded Outputs
+        Encoder = Encoder_R + Encoder_C
+
+        # Decoder
+        W = tf.compat.v1.get_variable(name="W", initializer=tf.random.truncated_normal(shape=[self.hidden_neuron, self.num_items], mean=0, stddev=0.03), dtype=tf.float32)
+        b = tf.compat.v1.get_variable(name="b", initializer=tf.zeros(shape=self.num_items), dtype=tf.float32)
+        pre_Decoder = tf.matmul(Encoder, W) + b
         self.Decoder = tf.identity(pre_Decoder)
 
-        # Loss calculation
+        # Loss Calculation
         pre_rec_cost = tf.multiply((self.input_R - self.Decoder), self.input_mask_R)
         rec_cost = tf.square(self.l2_norm(pre_rec_cost))
-        pre_reg_cost = tf.square(self.l2_norm(W_R)) + tf.square(self.l2_norm(V_R)) + tf.square(self.l2_norm(W_C)) + tf.square(self.l2_norm(V_C))
+        pre_reg_cost = tf.square(self.l2_norm(W)) + tf.square(self.l2_norm(V_R)) + tf.square(self.l2_norm(V_C))
         reg_cost = self.lambda_value * 0.5 * pre_reg_cost
 
         self.cost = rec_cost + reg_cost
@@ -282,7 +279,7 @@ def prepare_data(train, test, confounder, a, b):
            user_train_set, item_train_set, user_test_set, item_test_set, num_users, num_items
 
 # Load and prepare data
-ml_full, train, test = choose_data('ml', test_size=0.2)
+ml_full, train, test = choose_data('ml', test_size=0.1)
 confounder = pd.read_csv('C:/Users/Sten Stokroos/Desktop/NEW/zelf/Data/exposure_output/exp_ml_0.1_k30.csv', header=None)  # Update path accordingly
 a = 1  # Adjust these values as needed
 b = 0  # Adjust these values as needed
@@ -293,8 +290,8 @@ user_train_set, item_train_set, user_test_set, item_test_set, num_users, num_ite
 config = tf.compat.v1.ConfigProto()
 config.gpu_options.allow_growth = True
 
-args = argparse.Namespace(hidden_neuron=500, lambda_value=1, train_epoch=20, batch_size=100, optimizer_method='Adam', grad_clip=False, base_lr=1e-3, decay_epoch_step=50, random_seed=1000, display_step=1)
+args = argparse.Namespace(hidden_neuron=500, lambda_value=1, train_epoch=100, batch_size=100, optimizer_method='Adam', grad_clip=False, base_lr=1e-3, decay_epoch_step=50, random_seed=1000, display_step=1)
 
 with tf.compat.v1.Session(config=config) as sess:
-    model = IAutoRec(sess, args, num_users, num_items, R, mask_R, C, train_R, train_mask_R, test_R, test_mask_R, confounder_R, num_train_ratings, num_test_ratings, user_train_set, item_train_set, user_test_set, item_test_set, 'results/')
+    model = IAutoRec(sess, args, num_users, num_items, R, mask_R, C, train_R, train_mask_R, test_R, test_mask_R, confounder_R, num_train_ratings, num_test_ratings, user_train_set, item_train_set, user_test_set, item_test_set, 'zelf/results/')
     model.run()
