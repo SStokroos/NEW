@@ -8,6 +8,10 @@ from tqdm import tqdm
 from hyperopt import hp, fmin, tpe, Trials, STATUS_OK
 import os
 
+randseed = 42
+print("random seed: ", randseed)
+np.random.seed(randseed)
+
 class UAutoRec():
     def __init__(self, sess, num_user, num_item, learning_rate=0.001, reg_rate=0.1, epoch=20, batch_size=200,
                  verbose=False, T=3, display_step=1000):
@@ -81,25 +85,11 @@ class UAutoRec():
 
         avg_loss = total_loss / total_batch
         self.train_loss_history.append(avg_loss)
-
-        # Calculate training RMSE after each epoch
-        train_rmse = self.calculate_rmse(train_data, confounder_data)
+        train_rmse = self.calculate_rmse(train_data)
         self.train_rmse_history.append(train_rmse)
-
         return avg_loss, train_rmse
 
-    def calculate_rmse(self, data, confounder_data):
-        reconstruction = self.sess.run(self.layer_2, feed_dict={self.rating_matrix: self.train_data,
-                                                                self.rating_matrix_mask: self.train_data_mask,
-                                                                self.confounder_matrix: confounder_data})
-        error = 0
-        data_set = list(data.keys())
-        for (u, i) in data_set:
-            pred_rating = reconstruction[i, u]
-            error += (float(data.get((u, i))) - pred_rating) ** 2
-        rmse = RMSE(error, len(data_set))
-        return rmse
-
+    
     def test(self, test_data, confounder_data):
         self.reconstruction = self.sess.run(self.layer_2, feed_dict={self.rating_matrix: self.train_data,
                                                                      self.rating_matrix_mask: self.train_data_mask,
@@ -119,18 +109,37 @@ class UAutoRec():
     def execute(self, train_data, test_data, confounder_data):
         self.train_data = self._data_process(train_data.transpose())
         self.train_data_mask = np.sign(self.train_data)
-        print(f"Train data processed shape: {self.train_data.shape}")
-        print(f"Confounder data shape: {confounder_data.shape}")
+        # print(f"Train data processed shape: {self.train_data.shape}")
+        # print(f"Confounder data shape: {confounder_data.shape}")
         init = tf.compat.v1.global_variables_initializer()
         self.sess.run(init)
+
+        self.confounder_data = confounder_data  
+    
+        # Store confounder_data as an attribute
 
         with tqdm(total=self.epochs, desc="Training", unit="epoch") as pbar:
             for epoch in range(self.epochs):
                 avg_loss, train_rmse = self.train(train_data, confounder_data)
                 if (epoch) % self.T == 0:
-                    rmse, mae = self.test(test_data, confounder_data)
-                    pbar.set_postfix({"Loss": avg_loss, "Train RMSE": train_rmse, "Test RMSE": rmse, "MAE": mae})
+                    test_rmse, mae = self.test(test_data, confounder_data)
+                    pbar.set_postfix({"Loss": avg_loss, "Train RMSE": train_rmse, "Test RMSE": test_rmse, "MAE": mae})
                 pbar.update(1)
+
+    def calculate_rmse(self, data):
+        reconstruction = self.sess.run(self.layer_2, feed_dict={
+            self.rating_matrix: self.train_data,
+            self.rating_matrix_mask: self.train_data_mask,
+            self.confounder_matrix: self.confounder_data,
+        })
+        error = 0
+        count = 0
+        for (u, i), rating in data.items():
+            if rating > 0:  # Only consider non-zero ratings
+                pred_rating = reconstruction[i, u]
+                error += (float(rating) - pred_rating) ** 2
+                count += 1
+        return np.sqrt(error / count) if count > 0 else 0
 
     def save(self, path):
         saver = tf.compat.v1.train.Saver()
@@ -145,5 +154,5 @@ class UAutoRec():
         output = np.zeros((self.num_item, self.num_user))
         for u in range(self.num_user):
             for i in range(self.num_item):
-                output[i, u] = data.get((i, u), 0)  # Use .get() with a default value of 0
+                output[i, u] = data.get((i, u), 0)
         return output
