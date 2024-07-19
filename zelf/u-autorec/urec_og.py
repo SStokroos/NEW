@@ -191,7 +191,7 @@ def load_data_rating(dat, columns=[0, 1, 2], sep="\t"):
     return train_matrix.todok(), test_matrix.todok(), n_users, n_items
 
 
-train, test, user, item = load_data_rating('r3', columns=[0, 1, 2], sep="\t")
+train, test, user, item = load_data_rating('ml', columns=[0, 1, 2], sep="\t")
 
 
 
@@ -201,7 +201,7 @@ config = tf.compat.v1.ConfigProto()
 config.gpu_options.allow_growth = True
 
 with tf.compat.v1.Session(config=config) as sess:
-    model = UAutoRec(sess, user, item, learning_rate=0.001, reg_rate=0.1, epoch=50, batch_size=500, verbose=True)
+    model = UAutoRec(sess, user, item, learning_rate=0.001, reg_rate=0.1, epoch=80, batch_size=500, verbose=True)
     model.build_network()
     model.execute(train, test)
 

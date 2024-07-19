@@ -24,7 +24,7 @@ import pandas as pd  # Added for CSV export
 #################### Arguments ####################
 def parse_args():
     parser = argparse.ArgumentParser(description="Run MLP.")
-    parser.add_argument('--path', nargs='?', default='C:/Users/Sten Stokroos/Desktop/zelf/neural_collaborative_filtering/Data/',
+    parser.add_argument('--path', nargs='?', default='C:/Users/Sten Stokroos/Desktop/NEW/zelf/Data/in/',
                         help='Input data path.')
     parser.add_argument('--dataset', nargs='?', default='ml-1m',
                         help='Choose a dataset.')
@@ -46,7 +46,7 @@ def parse_args():
                         help='Show performance per X iterations')
     parser.add_argument('--out', type=int, default=1,
                         help='Whether to save the trained model.')
-    parser.add_argument('--pred_out', type=str, default='C:/Users/Sten Stokroos/Desktop/zelf/neural_collaborative_filtering/Data/predicted_scores.csv',
+    parser.add_argument('--pred_out', type=str, default='C:/Users/Sten Stokroos/Desktop/NEW/zelf/Data/ml_exp_MLP.csv',
                         help='Output CSV file for predicted scores.')
     return parser.parse_args()
 
@@ -199,17 +199,7 @@ if __name__ == '__main__':
     # Check Init performance
     t1 = time()
 
-    CAUSEFIT_DIR = 'C:/Users/Sten Stokroos/Desktop/zelf/dat/out/ml_wg'
-    
-    dim = 30 
-    U = np.loadtxt(CAUSEFIT_DIR + '/cause_pmf_k'+str(dim)+'_U.csv')
-    V = np.loadtxt(CAUSEFIT_DIR + '/cause_pmf_k'+str(dim)+'_V.csv')
-    U = (np.atleast_2d(U.T).T)
-    V = (np.atleast_2d(V.T).T)
-    substitute_values = U.dot(V.T)
- 
-    print("Substitute confounders matrix shape:", substitute_values.shape)
-    print("Type of substitute_values:", type(substitute_values))
+
 
     (hits, ndcgs) = evaluate_model(model, testRatings, testNegatives, topK, evaluation_threads)
     hr, ndcg = np.array(hits).mean(), np.array(ndcgs).mean()
