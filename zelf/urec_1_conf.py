@@ -2,19 +2,11 @@ import tensorflow as tf
 import time
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from scipy.sparse import csr_matrix
 from tqdm import tqdm
-from hyperopt import hp, fmin, tpe, Trials, STATUS_OK
-import os
 
-randseed = 42
-print("random seed: ", randseed)
-np.random.seed(randseed)
-
-class UAutoRec():
+class UAutoRec1conf():
     def __init__(self, sess, num_user, num_item, learning_rate=0.001, reg_rate=0.1, epoch=20, batch_size=200,
-                 verbose=False, T=3, display_step=1000):
+                 verbose=False, T=1, display_step=1000):
         self.learning_rate = learning_rate
         self.epochs = epoch
         self.batch_size = batch_size
@@ -81,12 +73,11 @@ class UAutoRec():
                 print(f"Train data shape: {self.train_data.shape}")
                 print(f"Confounder data shape: {confounder_data.shape}")
                 raise
-
         avg_loss = total_loss / total_batch
         self.train_loss_history.append(avg_loss)
         return avg_loss
 
-    
+
     def test(self, test_data, confounder_data):
         self.reconstruction = self.sess.run(self.layer_2, feed_dict={self.rating_matrix: self.train_data,
                                                                      self.rating_matrix_mask: self.train_data_mask,
@@ -106,23 +97,18 @@ class UAutoRec():
     def execute(self, train_data, test_data, confounder_data):
         self.train_data = self._data_process(train_data.transpose())
         self.train_data_mask = np.sign(self.train_data)
-        # print(f"Train data processed shape: {self.train_data.shape}")
-        # print(f"Confounder data shape: {confounder_data.shape}")
+        print(f"Train data processed shape: {self.train_data.shape}")
+        print(f"Confounder data shape: {confounder_data.shape}")
         init = tf.compat.v1.global_variables_initializer()
         self.sess.run(init)
-
-        self.confounder_data = confounder_data  
-    
-        # Store confounder_data as an attribute
 
         with tqdm(total=self.epochs, desc="Training", unit="epoch") as pbar:
             for epoch in range(self.epochs):
                 avg_loss = self.train(train_data, confounder_data)
                 if (epoch) % self.T == 0:
-                    test_rmse, mae = self.test(test_data, confounder_data)
-                    pbar.set_postfix({"Loss": avg_loss, "Train RMSE": 5, "Test RMSE": test_rmse, "MAE": mae})
+                    rmse, mae = self.test(test_data, confounder_data)
+                    pbar.set_postfix({"Loss": avg_loss, "RMSE": rmse, "MAE": mae})
                 pbar.update(1)
-
 
     def save(self, path):
         saver = tf.compat.v1.train.Saver()
@@ -137,9 +123,9 @@ class UAutoRec():
         output = np.zeros((self.num_item, self.num_user))
         for u in range(self.num_user):
             for i in range(self.num_item):
-                output[i, u] = data.get((i, u), 0)
+                output[i, u] = data.get((i, u), 0)  # Use .get() with a default value of 0
         return output
-    
+
 def RMSE(error, num):
     return np.sqrt(error / num)
 

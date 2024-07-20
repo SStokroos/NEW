@@ -5,32 +5,9 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from scipy.sparse import csr_matrix
 from tqdm import tqdm
-import os
 
-
-dir_r3 = 'C:/Users/Sten Stokroos/Desktop/NEW/zelf/Data/out'
-dir_ml = 'C:/Users/Sten Stokroos/Desktop/NEW/zelf/Data/out'
-randseed = 42
-
-def choose_data(dat, test_size=0.1):
-    if dat == 'r3':
-        train = pd.read_csv(os.path.join(dir_r3, 'r3_train.csv'), sep="\t", header=None, names=['userId', 'songId', 'rating'], usecols=[0, 1, 2], engine="python")
-        test = pd.read_csv(os.path.join(dir_r3, 'r3_test.csv'), sep="\t", header=None, names=['userId', 'songId', 'rating'], usecols=[0, 1, 2], engine="python")
-        
-        # Combine train and test to create the full dataset
-        r3_full = pd.concat([train, test]).sort_values(by=['userId', 'songId']).reset_index(drop=True)
-        
-        return r3_full, train, test
-    elif dat == 'ml':
-        ml_full = pd.read_csv(os.path.join(dir_ml, 'ml-1m_full.csv'), sep="\t", header=None, names=['userId', 'songId', 'rating'], usecols=[0, 1, 2], engine="python")
-        train, test = train_test_split(ml_full, test_size=test_size, random_state=randseed)
-        return ml_full, train, test
-    else:
-        print('Wrong data input')
-        return None, None, None
-
-class UAutoRec():
-    def __init__(self, sess, num_user, num_item, learning_rate=0.001, reg_rate=0.1, epoch=500, batch_size=200,
+class UAutoRec3conf():
+    def __init__(self, sess, num_user, num_item, hidden_neuron=500, learning_rate=0.001, reg_rate=0.1, epoch=500, batch_size=200,
                  verbose=False, T=3, display_step=1000):
         self.learning_rate = learning_rate
         self.epochs = epoch
@@ -39,45 +16,40 @@ class UAutoRec():
         self.sess = sess
         self.num_user = num_user
         self.num_item = num_item
+        self.hidden_neuron = hidden_neuron
         self.verbose = verbose
         self.T = T
         self.display_step = display_step
-        print("UAutoRec with Confounder and Exposure.")
+        self.train_loss_history = []
+        self.test_rmse_history = []
+        print("UAutoRec with Confounder.")
 
     def build_network(self, hidden_neuron=500):
         self.rating_matrix = tf.compat.v1.placeholder(dtype=tf.float32, shape=[self.num_item, None])
         self.rating_matrix_mask = tf.compat.v1.placeholder(dtype=tf.float32, shape=[self.num_item, None])
         self.confounder_matrix = tf.compat.v1.placeholder(dtype=tf.float32, shape=[self.num_item, None])
-        self.exposure_matrix = tf.compat.v1.placeholder(dtype=tf.float32, shape=[self.num_item, None])
 
         # Rating path
         V_R = tf.Variable(tf.random.normal([hidden_neuron, self.num_item], stddev=0.01))
         mu_R = tf.Variable(tf.random.normal([hidden_neuron], stddev=0.01))
-        layer_1_R = tf.sigmoid(tf.expand_dims(mu_R, 1) + tf.matmul(V_R, self.rating_matrix))
         
-        # Confounder path
-        V_C = tf.Variable(tf.random.normal([hidden_neuron, self.num_item], stddev=0.01))
-        mu_C = tf.Variable(tf.random.normal([hidden_neuron], stddev=0.01))
-        layer_1_C = tf.sigmoid(tf.expand_dims(mu_C, 1) + tf.matmul(V_C, self.confounder_matrix))
-        
-        # Exposure path
-        V_E = tf.Variable(tf.random.normal([hidden_neuron, self.num_item], stddev=0.01))
-        mu_E = tf.Variable(tf.random.normal([hidden_neuron], stddev=0.01))
-        layer_1_E = tf.sigmoid(tf.expand_dims(mu_E, 1) + tf.matmul(V_E, self.exposure_matrix))
-        
-        # Combine paths
-        layer_1 = layer_1_R + layer_1_C + layer_1_E
+        # Nonlinear combination with confounder
+        combined_input = self.rating_matrix + self.confounder_matrix
+        layer_1 = tf.sigmoid(tf.expand_dims(mu_R, 1) + tf.matmul(V_R, combined_input))
         
         # Output layer
         W = tf.Variable(tf.random.normal([self.num_item, hidden_neuron], stddev=0.01))
         b = tf.Variable(tf.random.normal([self.num_item], stddev=0.01))
         self.layer_2 = tf.matmul(W, layer_1) + tf.expand_dims(b, 1)
+        
+        # Loss function
         self.loss = tf.reduce_mean(tf.square(
             tf.norm(tf.multiply((self.rating_matrix - self.layer_2), self.rating_matrix_mask)))) + self.reg_rate * (
-        tf.square(tf.norm(W)) + tf.square(tf.norm(V_R)) + tf.square(tf.norm(V_C)) + tf.square(tf.norm(V_E)))
+            tf.square(tf.norm(W)) + tf.square(tf.norm(V_R)))
+        
         self.optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.loss)
 
-    def train(self, train_data, confounder_data, exposure_data):
+    def train(self, train_data, confounder_data):
         self.num_training = self.num_user
         total_batch = int(self.num_training / self.batch_size)
         idxs = np.random.permutation(self.num_training)  # shuffled ordering
@@ -89,28 +61,33 @@ class UAutoRec():
                 batch_set_idx = idxs[i * self.batch_size:]
             elif i < total_batch - 1:
                 batch_set_idx = idxs[i * self.batch_size: (i + 1) * self.batch_size]
+            
+            # print(f"Train data shape: {self.train_data.shape}")
+            # print(f"Confounder data shape: {confounder_data.shape}")
 
             try:
                 _, loss = self.sess.run([self.optimizer, self.loss],
                                         feed_dict={self.rating_matrix: self.train_data[:, batch_set_idx],
                                                    self.rating_matrix_mask: self.train_data_mask[:, batch_set_idx],
-                                                   self.confounder_matrix: confounder_data[:, batch_set_idx],
-                                                   self.exposure_matrix: exposure_data[:, batch_set_idx]})
+                                                   self.confounder_matrix: confounder_data[:, batch_set_idx]})
+                
                 total_loss += loss
             except IndexError as e:
                 print(f"IndexError: {e}")
+                print(f"Batch set idx: {batch_set_idx}")
                 print(f"Max index in batch_set_idx: {max(batch_set_idx)}")
                 print(f"Train data shape: {self.train_data.shape}")
                 print(f"Confounder data shape: {confounder_data.shape}")
                 raise
 
-        return total_loss / total_batch
+        avg_loss = total_loss / total_batch
+        self.train_loss_history.append(avg_loss)
+        return avg_loss
 
-    def test(self, test_data, confounder_data, exposure_data):
+    def test(self, test_data, confounder_data):
         self.reconstruction = self.sess.run(self.layer_2, feed_dict={self.rating_matrix: self.train_data,
                                                                      self.rating_matrix_mask: self.train_data_mask,
-                                                                     self.confounder_matrix: confounder_data,
-                                                                     self.exposure_matrix: exposure_data})
+                                                                     self.confounder_matrix: confounder_data})
         error = 0
         error_mae = 0
         test_set = list(test_data.keys())
@@ -120,21 +97,20 @@ class UAutoRec():
             error_mae += (np.abs(float(test_data.get((u, i))) - pred_rating_test))
         rmse = RMSE(error, len(test_set))
         mae = MAE(error_mae, len(test_set))
+        self.test_rmse_history.append(rmse)
         return rmse, mae
 
-    def execute(self, train_data, test_data, confounder_data, exposure_data):
+    def execute(self, train_data, test_data, confounder_data):
         self.train_data = self._data_process(train_data.transpose())
         self.train_data_mask = np.sign(self.train_data)
-        print(f"Train data processed shape: {self.train_data.shape}")
-        print(f"Confounder data shape: {confounder_data.shape}")
         init = tf.compat.v1.global_variables_initializer()
         self.sess.run(init)
 
         with tqdm(total=self.epochs, desc="Training", unit="epoch") as pbar:
             for epoch in range(self.epochs):
-                avg_loss = self.train(train_data, confounder_data, exposure_data)
+                avg_loss = self.train(train_data, confounder_data)
                 if (epoch) % self.T == 0:
-                    rmse, mae = self.test(test_data, confounder_data, exposure_data)
+                    rmse, mae = self.test(test_data, confounder_data)
                     pbar.set_postfix({"Loss": avg_loss, "RMSE": rmse, "MAE": mae})
                 pbar.update(1)
 
@@ -154,5 +130,8 @@ class UAutoRec():
                 output[i, u] = data.get((i, u), 0)  # Use .get() with a default value of 0
         return output
 
+def RMSE(error, num):
+    return np.sqrt(error / num)
 
-
+def MAE(error_mae, num):
+    return (error_mae / num)
