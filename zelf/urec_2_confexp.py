@@ -6,7 +6,7 @@ from tqdm import tqdm
 
 class UAutoRec2confexp():
     def __init__(self, sess, num_user, num_item, learning_rate=0.001, reg_rate=0.1, epoch=500, batch_size=200,
-                 verbose=False, T=3, display_step=1000):
+                 verbose=False, T=3, display_step=1000, learning_rate_scheduler = None):
         self.learning_rate = learning_rate
         self.epochs = epoch
         self.batch_size = batch_size
@@ -19,6 +19,7 @@ class UAutoRec2confexp():
         self.display_step = display_step
         self.train_loss_history = []
         self.test_rmse_history = []
+
         print("UAutoRec with Confounder and Exposure.")
 
     def build_network(self, hidden_neuron=500):
@@ -110,18 +111,7 @@ class UAutoRec2confexp():
                 if (epoch) % self.T == 0:
                     rmse, mae = self.test(test_data, confounder_data, exposure_data)
                     pbar.set_postfix({"Loss": avg_loss, "RMSE": rmse, "MAE": mae})
-
-                if rmse < best_rmse:
-                    best_rmse = rmse
-                    epochs_no_improve = 0
-                else:
-                    epochs_no_improve += 1
-
-                if epochs_no_improve == 5:
-                    print(f"Early stopping at epoch {epoch}")
-                    break
-
-            pbar.update(1)
+                pbar.update(1)
 
     def save(self, path):
         saver = tf.compat.v1.train.Saver()

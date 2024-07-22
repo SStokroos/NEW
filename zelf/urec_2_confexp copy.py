@@ -2,13 +2,11 @@ import tensorflow as tf
 import time
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from scipy.sparse import csr_matrix
 from tqdm import tqdm
 
-class UAutoRec():
+class UAutoRec2confexpcopy():
     def __init__(self, sess, num_user, num_item, learning_rate=0.001, reg_rate=0.1, epoch=500, batch_size=200,
-                 verbose=False, T=3, display_step=1000):
+                 verbose=False, T=3, display_step=1000, learning_rate_scheduler=None):
         self.learning_rate = learning_rate
         self.epochs = epoch
         self.batch_size = batch_size
@@ -19,6 +17,9 @@ class UAutoRec():
         self.verbose = verbose
         self.T = T
         self.display_step = display_step
+        self.train_loss_history = []
+        self.test_rmse_history = []
+        self.learning_rate_scheduler = learning_rate_scheduler
         print("UAutoRec with Confounder and Exposure.")
 
     def build_network(self, hidden_neuron=500):
@@ -27,13 +28,10 @@ class UAutoRec():
         self.confounder_matrix = tf.compat.v1.placeholder(dtype=tf.float32, shape=[self.num_item, None])
         self.exposure_matrix = tf.compat.v1.placeholder(dtype=tf.float32, shape=[self.num_item, None])
 
-
         V_R = tf.Variable(tf.random.normal([hidden_neuron, self.num_item], stddev=0.01)) 
         V_C = tf.Variable(tf.random.normal([hidden_neuron, self.num_item], stddev=0.01))
         V_E = tf.Variable(tf.random.normal([hidden_neuron, self.num_item], stddev=0.01))
-
         mu = tf.Variable(tf.random.normal([hidden_neuron], stddev=0.01))
-
 
         combined_inputs = tf.expand_dims(mu, 1) + tf.matmul(V_R, self.rating_matrix) + tf.matmul(V_C, self.confounder_matrix) + tf.matmul(V_E, self.exposure_matrix)
         
@@ -44,19 +42,12 @@ class UAutoRec():
         W = tf.Variable(tf.random.normal([self.num_item, hidden_neuron], stddev=0.01))
         b = tf.Variable(tf.random.normal([self.num_item], stddev=0.01))
         self.layer_2 = tf.matmul(W, layer_1) + tf.expand_dims(b, 1)
-        
 
         self.loss = tf.reduce_mean(tf.square(
             tf.norm(tf.multiply((self.rating_matrix - self.layer_2), self.rating_matrix_mask)))) + self.reg_rate * (
         tf.square(tf.norm(W)) + tf.square(tf.norm(V_R)) + tf.square(tf.norm(V_C)) + tf.square(tf.norm(V_E)))
-        
 
-        
         self.optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.loss)
-
-
-
-
 
     def train(self, train_data, confounder_data, exposure_data):
         self.num_training = self.num_user
@@ -65,7 +56,6 @@ class UAutoRec():
 
         total_loss = 0
         for i in range(total_batch):
-            start_time = time.time()
             if i == total_batch - 1:
                 batch_set_idx = idxs[i * self.batch_size:]
             elif i < total_batch - 1:
@@ -85,7 +75,9 @@ class UAutoRec():
                 print(f"Confounder data shape: {confounder_data.shape}")
                 raise
 
-        return total_loss / total_batch
+        avg_loss = total_loss / total_batch
+        self.train_loss_history.append(avg_loss)
+        return avg_loss
 
     def test(self, test_data, confounder_data, exposure_data):
         self.reconstruction = self.sess.run(self.layer_2, feed_dict={self.rating_matrix: self.train_data,
@@ -101,18 +93,26 @@ class UAutoRec():
             error_mae += (np.abs(float(test_data.get((u, i))) - pred_rating_test))
         rmse = RMSE(error, len(test_set))
         mae = MAE(error_mae, len(test_set))
+        self.test_rmse_history.append(rmse)
         return rmse, mae
 
     def execute(self, train_data, test_data, confounder_data, exposure_data):
         self.train_data = self._data_process(train_data.transpose())
         self.train_data_mask = np.sign(self.train_data)
-        # print(f"Train data processed shape: {self.train_data.shape}")
-        # print(f"Confounder data shape: {confounder_data.shape}")
         init = tf.compat.v1.global_variables_initializer()
         self.sess.run(init)
 
         with tqdm(total=self.epochs, desc="Training", unit="epoch") as pbar:
             for epoch in range(self.epochs):
+                # Update learning rate
+                if self.learning_rate_scheduler is not None:
+                    current_learning_rate = self.learning_rate_scheduler(epoch)
+                else:
+                    current_learning_rate = self.learning_rate
+
+                # Update optimizer with the current learning rate
+                optimizer = tf.keras.optimizers.Adam(learning_rate=current_learning_rate)
+                
                 avg_loss = self.train(train_data, confounder_data, exposure_data)
                 if (epoch) % self.T == 0:
                     rmse, mae = self.test(test_data, confounder_data, exposure_data)
@@ -140,96 +140,3 @@ def RMSE(error, num):
 
 def MAE(error_mae, num):
     return (error_mae / num)
-
-def load_data_rating(train_file, test_file, columns=[0, 1, 2], sep="\t"):
-    train_data = pd.read_csv(train_file, sep=sep, header=None, names=['userId', 'itemId', 'rating'], usecols=columns, engine="python")
-    # train_data, vd_data =  train_test_split(tr_vd_dat, test_size=0.2, random_state=42)#pd.read_csv(train_file, sep=sep, header=None, names=['userId', 'itemId', 'rating'], usecols=columns, engine="python")
-    test_data = pd.read_csv(test_file, sep=sep, header=None, names=['userId', 'itemId', 'rating'], usecols=columns, engine="python")
-
-    n_users = max(train_data['userId'].max(), test_data['userId'].max()) + 1
-    n_items = max(train_data['itemId'].max(), test_data['itemId'].max()) + 1
-
-    train_row = []
-    train_col = []
-    train_rating = []
-
-    for line in train_data.itertuples():
-        u = line[1]
-        i = line[2]
-        train_row.append(u)
-        train_col.append(i)
-        train_rating.append(line[3])
-
-    train_matrix = csr_matrix((train_rating, (train_row, train_col)), shape=(n_users, n_items))
-
-    test_row = []
-    test_col = []
-    test_rating = []
-    for line in test_data.itertuples():
-        u = line[1]
-        i = line[2]
-        test_row.append(u)
-        test_col.append(i)
-        test_rating.append(line[3])
-
-    test_matrix = csr_matrix((test_rating, (test_row, test_col)), shape=(n_users, n_items))
-
-    # vd_row = []
-    # vd_col = []
-    # vd_rating = []
-    # for line in vd_data.itertuples():
-    #     u = line[1]
-    #     i = line[2]
-    #     vd_row.append(u)
-    #     vd_col.append(i)
-    #     vd_rating.append(line[3])
-
-    # vd_matrix = csr_matrix((vd_rating, (vd_row,vd_col)), shape=(n_users, n_items))
-
-    print("Load data finished. Number of users:", n_users, "Number of items:", n_items)
-    return train_matrix.todok(), test_matrix.todok(), n_users, n_items
-
-# Example usage
-file1 = 'C:/Users/Sten Stokroos/Desktop/zelf/neural_collaborative_filtering/Data/ml-1m.train.rating'  # Replace with the actual file path
-file2 = 'C:/Users/Sten Stokroos/Desktop/zelf/neural_collaborative_filtering/Data/ml-1m.test.rating' # Replace with the actual file path
-
-train, test, user, item = load_data_rating(file1, file2, columns=[0, 1, 2], sep="\t")
-
-
-
-CAUSEFIT_DIR = 'C:/Users/Sten Stokroos/Desktop/Thesis2.0/zelf/dat/out/ml_wg_0.2split'
-    
-dim = 30 
-U = np.loadtxt(CAUSEFIT_DIR + '/cause_pmf_k'+str(dim)+'_U.csv')
-B = np.loadtxt(CAUSEFIT_DIR + '/cause_pmf_k'+str(dim)+'_V.csv')
-U = np.atleast_2d(U.T).T
-B = np.atleast_2d(B.T).T
-confounder_data = (U.dot(B.T)).T
-
-# #MLP OPtion
-# df = pd.read_csv('C:/Users/Sten Stokroos/Desktop/Thesis2.0/zelf/neural_collaborative_filtering/Data/predicted_scores_copy.csv')
-# confounder_data = df.to_numpy()
-# # Transpose the array if needed
-# confounder_data = confounder_data.T
-
-
-
-# Create the exposure data matrix
-exposure_data = (train > 0).astype(np.float32).todense().T
-
-# Set TensorFlow session
-config = tf.compat.v1.ConfigProto()
-config.gpu_options.allow_growth = True
-
-with tf.compat.v1.Session(config=config) as sess:
-    model = UAutoRec(sess, user, item, learning_rate=0.001, reg_rate=0.1, epoch=20, batch_size=500, verbose=True)
-    model.build_network()
-    model.execute(train, test, confounder_data, exposure_data)
-
-
-
-# 20/20 [01:15<00:00,  3.79s/epoch, Loss=5.98e+4, RMSE=0.91, MAE=0.721] YES BABYYYYY MLP
-
-# 3.16s/epoch, Loss=6.76e+4, RMSE=0.976, MAE=0.778] HPF and test.rating everywehre
-
-

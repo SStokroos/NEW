@@ -24,6 +24,7 @@ class UAutoRec1confexp():
         self.display_step = display_step
         self.train_loss_history = []
         self.test_rmse_history = []
+
         print("UAutoRec with Confounder and Exposure.")
 
     def build_network(self, hidden_neuron=500):
