@@ -1,13 +1,11 @@
 import tensorflow as tf
-import time
 import numpy as np
-import pandas as pd
 from tqdm import tqdm
 
 class UAutoRec2confexpcopy():
     def __init__(self, sess, num_user, num_item, learning_rate=0.001, reg_rate=0.1, epoch=500, batch_size=200,
                  verbose=False, T=3, display_step=1000, learning_rate_scheduler=None):
-        self.learning_rate = learning_rate
+        self.learning_rate_initial = learning_rate
         self.epochs = epoch
         self.batch_size = batch_size
         self.reg_rate = reg_rate
@@ -19,10 +17,15 @@ class UAutoRec2confexpcopy():
         self.display_step = display_step
         self.train_loss_history = []
         self.test_rmse_history = []
+        self.learning_rate_var = tf.compat.v1.placeholder(tf.float32, [], name='learning_rate')
         self.learning_rate_scheduler = learning_rate_scheduler
+
+
         print("UAutoRec with Confounder and Exposure.")
 
     def build_network(self, hidden_neuron=500):
+        self.learning_rate = tf.compat.v1.placeholder(dtype=tf.float32, shape=[], name='learning_rate')
+        
         self.rating_matrix = tf.compat.v1.placeholder(dtype=tf.float32, shape=[self.num_item, None])
         self.rating_matrix_mask = tf.compat.v1.placeholder(dtype=tf.float32, shape=[self.num_item, None])
         self.confounder_matrix = tf.compat.v1.placeholder(dtype=tf.float32, shape=[self.num_item, None])
@@ -47,9 +50,10 @@ class UAutoRec2confexpcopy():
             tf.norm(tf.multiply((self.rating_matrix - self.layer_2), self.rating_matrix_mask)))) + self.reg_rate * (
         tf.square(tf.norm(W)) + tf.square(tf.norm(V_R)) + tf.square(tf.norm(V_C)) + tf.square(tf.norm(V_E)))
 
-        self.optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.loss)
+        self.optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=self.learning_rate_var).minimize(self.loss)
 
-    def train(self, train_data, confounder_data, exposure_data):
+
+    def train(self, train_data, confounder_data, exposure_data, current_learning_rate):
         self.num_training = self.num_user
         total_batch = int(self.num_training / self.batch_size)
         idxs = np.random.permutation(self.num_training)  # shuffled ordering
@@ -66,7 +70,8 @@ class UAutoRec2confexpcopy():
                                         feed_dict={self.rating_matrix: self.train_data[:, batch_set_idx],
                                                    self.rating_matrix_mask: self.train_data_mask[:, batch_set_idx],
                                                    self.confounder_matrix: confounder_data[:, batch_set_idx],
-                                                   self.exposure_matrix: exposure_data[:, batch_set_idx]})
+                                                   self.exposure_matrix: exposure_data[:, batch_set_idx],
+                                                   self.learning_rate: current_learning_rate})
                 total_loss += loss
             except IndexError as e:
                 print(f"IndexError: {e}")
@@ -102,18 +107,18 @@ class UAutoRec2confexpcopy():
         init = tf.compat.v1.global_variables_initializer()
         self.sess.run(init)
 
+        best_rmse = float('inf')
+        epochs_no_improve = 0
+
         with tqdm(total=self.epochs, desc="Training", unit="epoch") as pbar:
             for epoch in range(self.epochs):
-                # Update learning rate
-                if self.learning_rate_scheduler is not None:
+                if self.learning_rate_scheduler:
                     current_learning_rate = self.learning_rate_scheduler(epoch)
                 else:
-                    current_learning_rate = self.learning_rate
+                    current_learning_rate = self.learning_rate_initial
 
-                # Update optimizer with the current learning rate
-                optimizer = tf.keras.optimizers.Adam(learning_rate=current_learning_rate)
-                
-                avg_loss = self.train(train_data, confounder_data, exposure_data)
+                avg_loss = self.train(train_data, confounder_data, exposure_data, current_learning_rate)
+                # ... (rest of the method)
                 if (epoch) % self.T == 0:
                     rmse, mae = self.test(test_data, confounder_data, exposure_data)
                     pbar.set_postfix({"Loss": avg_loss, "RMSE": rmse, "MAE": mae})

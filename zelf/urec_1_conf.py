@@ -101,8 +101,7 @@ class UAutoRec1conf():
         print(f"Confounder data shape: {confounder_data.shape}")
         init = tf.compat.v1.global_variables_initializer()
         self.sess.run(init)
-        best_rmse = float('inf')
-        epochs_no_improve = 0
+
         
         with tqdm(total=self.epochs, desc="Training", unit="epoch") as pbar:
             for epoch in range(self.epochs):
@@ -111,18 +110,6 @@ class UAutoRec1conf():
                     rmse, mae = self.test(test_data, confounder_data)
                     pbar.set_postfix({"Loss": avg_loss, "RMSE": rmse, "MAE": mae})
                 pbar.update(1)
-
-                                # Early stopping
-                if rmse < best_rmse:
-                    best_rmse = rmse
-                    epochs_no_improve = 0
-                else:
-                    epochs_no_improve += 1
-
-                if epochs_no_improve == 10:
-                    print(f"Early stopping at epoch {epoch}")
-                    break
-
 
 
     def save(self, path):

@@ -102,8 +102,6 @@ class UAutoRec2confexp():
         init = tf.compat.v1.global_variables_initializer()
         self.sess.run(init)
 
-        best_rmse = float('inf')
-        epochs_no_improve = 0
 
         with tqdm(total=self.epochs, desc="Training", unit="epoch") as pbar:
             for epoch in range(self.epochs):
