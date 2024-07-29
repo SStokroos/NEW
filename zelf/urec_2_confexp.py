@@ -96,14 +96,14 @@ class UAutoRec2confexp():
         self.test_rmse_history.append(rmse)
         return rmse, mae
 
-    def execute(self, train_data, test_data, confounder_data, exposure_data, patience=10):
+    def execute(self, train_data, test_data, confounder_data, exposure_data):#, patience = 10):
         self.train_data = self._data_process(train_data.transpose())
         self.train_data_mask = np.sign(self.train_data)
         init = tf.compat.v1.global_variables_initializer()
         self.sess.run(init)
 
-        best_rmse = float('inf')
-        epochs_no_improve = 0
+        # best_rmse = float('inf')
+        # epochs_no_improve = 0
 
         with tqdm(total=self.epochs, desc="Training", unit="epoch") as pbar:
             for epoch in range(self.epochs):
@@ -112,17 +112,17 @@ class UAutoRec2confexp():
                     rmse, mae = self.test(test_data, confounder_data, exposure_data)
                     pbar.set_postfix({"Loss": avg_loss, "RMSE": rmse, "MAE": mae})
                     
-                    # Check for improvement
-                    if rmse < best_rmse:
-                        best_rmse = rmse
-                        epochs_no_improve = 0
-                    else:
-                        epochs_no_improve += 1
+                    # # Check for improvement
+                    # if rmse < best_rmse:
+                    #     best_rmse = rmse
+                    #     epochs_no_improve = 0
+                    # else:
+                    #     epochs_no_improve += 1
 
-                    # Early stopping
-                    if epochs_no_improve >= patience:
-                        print(f"Early stopping at epoch {epoch}. Best RMSE: {best_rmse}")
-                        break
+                    # # Early stopping
+                    # if epochs_no_improve >= patience:
+                    #     print(f"Early stopping at epoch {epoch}. Best RMSE: {best_rmse}")
+                    #     break
 
                 pbar.update(1)  # Ensure the progress bar updates correctly after each epoch
 

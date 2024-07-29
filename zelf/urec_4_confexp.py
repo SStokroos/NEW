@@ -110,6 +110,8 @@ class UAutoRec4confexp():
         init = tf.compat.v1.global_variables_initializer()
         self.sess.run(init)
 
+
+
         with tqdm(total=self.epochs, desc="Training", unit="epoch") as pbar:
             for epoch in range(self.epochs):
                 avg_loss = self.train(train_data, confounder_data, exposure_data)

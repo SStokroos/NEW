@@ -230,14 +230,14 @@ if __name__ == '__main__':
     if args.out > 0:
         print("The best MLP model is saved to %s" %(model_out_file))
     
-    # Generate predictions and save to CSV
-    user_input, item_input, predictions = generate_predictions(model, num_users, num_items)
-    prediction_matrix = np.zeros((num_users, num_items))
-    for user, item, prediction in zip(user_input, item_input, predictions):
-        prediction_matrix[user, item] = prediction[0]  # Extract scalar from array
+    # # Generate predictions and save to CSV
+    # user_input, item_input, predictions = generate_predictions(model, num_users, num_items)
+    # prediction_matrix = np.zeros((num_users, num_items))
+    # for user, item, prediction in zip(user_input, item_input, predictions):
+    #     prediction_matrix[user, item] = prediction[0]  # Extract scalar from array
 
-    pred_out_file = args.pred_out
-    np.savetxt(pred_out_file, prediction_matrix, delimiter=',')
-    print(f"Predicted scores are saved to {pred_out_file}")
+    # pred_out_file = args.pred_out
+    # np.savetxt(pred_out_file, prediction_matrix, delimiter=',')
+    # print(f"Predicted scores are saved to {pred_out_file}")
 
     
